@@ -1,5 +1,6 @@
 """Ingest products from SQLite with watermark-based incremental loading → Bronze parquet."""
 from __future__ import annotations
+import hashlib
 import logging
 import sqlite3
 from datetime import datetime, timezone
@@ -55,6 +56,9 @@ def ingest_products(
     check_schema(list(df.columns), EXPECTED_COLUMNS, "products", logger)
 
     df["_ingested_at"] = datetime.now(timezone.utc).isoformat()
+    df["_row_hash"] = df[EXPECTED_COLUMNS].apply(
+        lambda r: hashlib.md5("|".join(r.astype(str)).encode()).hexdigest(), axis=1
+    )
 
     out_dir = bronze_dir / "products"
     out_dir.mkdir(parents=True, exist_ok=True)

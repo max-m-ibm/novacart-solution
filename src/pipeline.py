@@ -7,6 +7,7 @@ Usage:
 from __future__ import annotations
 import argparse
 import sys
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -24,12 +25,14 @@ from src.transform.silver import (
 from src.transform.gold import (
     build_dim_product,
     build_dim_customer,
+    build_dim_date,
     build_fact_orders,
 )
 
 
 def run_one_date(date_str: str, config: Config) -> dict:
-    logger = get_logger("novacart", config.logs)
+    run_id = uuid.uuid4().hex[:12]
+    logger = get_logger("novacart", config.logs, run_id=run_id)
     state = StateManager(config.state)
     started_at = datetime.utcnow()
     stages: list[dict] = []
@@ -59,7 +62,7 @@ def run_one_date(date_str: str, config: Config) -> dict:
         stage("silver_orders",    lambda: build_silver_orders(
             date_str, config.bronze, config.silver, config.quarantine, logger))
         stage("silver_customers", lambda: build_silver_customers(
-            config.bronze, config.silver, config.quarantine, logger))
+            date_str, config.bronze, config.silver, config.quarantine, logger))
         stage("silver_products",  lambda: build_silver_products(
             config.bronze, config.silver, config.quarantine, logger))
 
@@ -70,6 +73,8 @@ def run_one_date(date_str: str, config: Config) -> dict:
             config.silver, config.gold,
             config.gold_cfg.get("scd2_track_fields", ["city", "country", "email"]),
             logger))
+        stage("dim_date",      lambda: build_dim_date(
+            config.gold, logger))
         stage("fact_orders",   lambda: build_fact_orders(
             date_str, config.silver, config.gold, logger))
 

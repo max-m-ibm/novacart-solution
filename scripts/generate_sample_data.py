@@ -46,11 +46,17 @@ ORDERS = {
         ["order_id","customer_id","product_id","order_date","quantity","unit_price","status"],
         ["ORD-008","CUST-003","PROD-003","2025-11-09","4","29.99","pending"],
         ["ORD-009","CUST-005","PROD-001","2025-11-09","2","49.99","shipped"],
+        # Bad row 1 — quantity = 0 → quarantine
+        ["ORD-010","CUST-001","PROD-002","2025-11-09","0","199.00","pending"],
+        # Bad row 2 — invalid status → quarantine
+        ["ORD-011","CUST-002","PROD-001","2025-11-09","1","49.99","refunded"],
+        # Bad row 3 — negative unit_price → quarantine
+        ["ORD-012","CUST-004","PROD-003","2025-11-09","2","-5.00","shipped"],
     ],
     "2025-11-10": [
         ["order_id","customer_id","product_id","order_date","quantity","unit_price","status"],
-        ["ORD-010","CUST-002","PROD-002","2025-11-10","1","199.00","delivered"],
-        ["ORD-011","CUST-004","PROD-001","2025-11-10","6","49.99","shipped"],
+        ["ORD-013","CUST-002","PROD-002","2025-11-10","1","199.00","delivered"],
+        ["ORD-014","CUST-004","PROD-001","2025-11-10","6","49.99","shipped"],
     ],
 }
 
@@ -63,12 +69,13 @@ for date_str, rows in ORDERS.items():
 
 # ── Customers JSON (nested address) ─────────────────────────────────────────
 
+# Initial customer snapshot: C002 is in Denver (will move to Portland in v2)
 customers = [
     {"customer_id": "CUST-001", "first_name": "Alice",  "last_name": "Smith",
      "email": "alice@example.com",  "address": {"city": "New York",  "country": "US"},
      "signup_date": "2024-01-15", "tier": "gold"},
     {"customer_id": "CUST-002", "first_name": "Bob",    "last_name": "Jones",
-     "email": "bob@example.com",    "address": {"city": "London",    "country": "GB"},
+     "email": "bob@example.com",    "address": {"city": "Denver",    "country": "US"},
      "signup_date": "2024-03-22", "tier": "standard"},
     {"customer_id": "CUST-003", "first_name": "Carol",  "last_name": "White",
      "email": "carol@example.com",  "address": {"city": "Toronto",   "country": "CA"},
@@ -76,10 +83,14 @@ customers = [
     {"customer_id": "CUST-004", "first_name": "Dan",    "last_name": "Brown",
      "email": "dan@example.com",    "address": {"city": "Sydney",    "country": "AU"},
      "signup_date": "2024-06-18", "tier": "standard"},
-    # Bad row — missing @ in email → quarantine
+    # Bad row 1 — missing @ in email → quarantine
     {"customer_id": "CUST-005", "first_name": "Eve",    "last_name": "Davis",
      "email": "eve-at-example.com", "address": {"city": "Paris",     "country": "FR"},
      "signup_date": "2024-08-01", "tier": "gold"},
+    # Bad row 2 — missing @ in email → quarantine
+    {"customer_id": "CUST-006", "first_name": "Frank",  "last_name": "Miller",
+     "email": "frank-at-example.com", "address": {"city": "Berlin",  "country": "DE"},
+     "signup_date": "2024-09-12", "tier": "standard"},
 ]
 
 cust_path = CUSTOMER_DIR / "customers.json"
@@ -101,6 +112,7 @@ conn.execute("""
         updated_at  TEXT NOT NULL
     )
 """)
+# Initial products: P001 cost is 22.50 (will be overwritten to 44.99 in v2 — SCD-1)
 products = [
     ("PROD-001", "Wireless Headphones", "Electronics", 22.50, "SUP-A", "2025-10-01T10:00:00"),
     ("PROD-002", "Laptop Stand",        "Accessories",  8.75, "SUP-B", "2025-10-15T14:30:00"),

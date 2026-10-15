@@ -1,5 +1,6 @@
 """Ingest customers nested JSON → Bronze parquet."""
 from __future__ import annotations
+import hashlib
 import json
 import logging
 from datetime import datetime, timezone
@@ -44,6 +45,9 @@ def ingest_customers(
 
     df["_source_file"] = src.name
     df["_ingested_at"] = datetime.now(timezone.utc).isoformat()
+    df["_row_hash"] = df[EXPECTED_COLUMNS].apply(
+        lambda r: hashlib.md5("|".join(r.astype(str)).encode()).hexdigest(), axis=1
+    )
 
     out_dir = bronze_dir / "customers"
     out_dir.mkdir(parents=True, exist_ok=True)

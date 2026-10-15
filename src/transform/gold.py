@@ -2,7 +2,7 @@
 from __future__ import annotations
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, date, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -117,6 +117,47 @@ def build_dim_customer(
     return out_path
 
 
+# ── dim_date: calendar dimension ─────────────────────────────────────────────
+
+def build_dim_date(
+    gold_dir: Path,
+    logger: logging.Logger,
+    start_date: str = "2020-01-01",
+    end_date: str = "2030-12-31",
+) -> Path:
+    """Build (or rebuild) a calendar dimension table covering start_date..end_date."""
+    out_dir = gold_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "dim_date.parquet"
+
+    start = date.fromisoformat(start_date)
+    end   = date.fromisoformat(end_date)
+
+    rows = []
+    current = start
+    while current <= end:
+        rows.append({
+            "date_key":       int(current.strftime("%Y%m%d")),
+            "full_date":      current.isoformat(),
+            "year":           current.year,
+            "quarter":        (current.month - 1) // 3 + 1,
+            "month":          current.month,
+            "month_name":     current.strftime("%B"),
+            "week_of_year":   int(current.strftime("%W")),
+            "day_of_month":   current.day,
+            "day_of_week":    current.isoweekday(),   # 1=Mon … 7=Sun
+            "day_name":       current.strftime("%A"),
+            "is_weekend":     current.isoweekday() >= 6,
+        })
+        current += timedelta(days=1)
+
+    df = pd.DataFrame(rows)
+    df.to_parquet(out_path, index=False)
+    log_event(logger, "INFO", "dim_date_written", rows=len(df),
+              start=start_date, end=end_date)
+    return out_path
+
+
 # ── fact_orders: idempotent partition-replace ─────────────────────────────────
 
 def build_fact_orders(
@@ -139,7 +180,8 @@ def build_fact_orders(
 
     # Derived metrics
     df["order_date"] = pd.to_datetime(df["order_date"])
-    df["total_amount"] = df["quantity"] * df["unit_price"]
+    df["date_key"] = df["order_date"].dt.strftime("%Y%m%d").astype(int)
+    df["total_amount"] = df["quantity"].astype(float) * df["unit_price"].astype(float)
 
     # Idempotent: full replace of this date partition
     df.to_parquet(out_path, index=False)

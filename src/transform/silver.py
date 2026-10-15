@@ -19,27 +19,37 @@ def _validate_df(
     quarantine_path: Path,
     logger: logging.Logger,
     source_name: str,
+    date_str: str = "unknown",
 ) -> pd.DataFrame:
-    """Validate each row with Pydantic. Good rows → Silver, bad rows → quarantine."""
+    """Validate each row with Pydantic. Good rows → Silver (typed), bad rows → quarantine."""
     good, bad = [], []
+    meta_cols = [c for c in df.columns if c.startswith("_")]
     for _, row in df.iterrows():
+        row_dict = row.to_dict()
         try:
-            model(**row.to_dict())
-            good.append(row)
+            validated = model(**row_dict)
+            # Use pydantic-coerced values so Silver has correct types, not raw strings
+            typed = validated.model_dump()
+            # Re-attach Bronze metadata columns unchanged
+            for col in meta_cols:
+                typed[col] = row_dict[col]
+            good.append(typed)
         except (ValidationError, Exception) as exc:
-            row_dict = row.to_dict()
-            row_dict["_quarantine_reason"] = str(exc)
+            row_dict["_error_reason"] = str(exc)
             row_dict["_quarantined_at"] = datetime.now(timezone.utc).isoformat()
             bad.append(row_dict)
 
-    if bad:
-        q_dir = quarantine_path / source_name
-        q_dir.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-        pd.DataFrame(bad).to_parquet(q_dir / f"{ts}.parquet", index=False)
-        log_event(logger, "WARNING", f"{source_name}_quarantined", count=len(bad))
+    rows_in = len(df)
+    rows_quarantined = len(bad)
 
-    result = pd.DataFrame(good) if good else pd.DataFrame(columns=df.columns)
+    if bad:
+        q_dir = quarantine_path / source_name / f"dt={date_str}"
+        q_dir.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(bad).to_parquet(q_dir / f"{source_name}_bad.parquet", index=False)
+        log_event(logger, "WARNING", f"{source_name}_quarantined",
+                  rows_in=rows_in, rows_quarantined=rows_quarantined)
+
+    result = pd.DataFrame(good) if good else pd.DataFrame(columns=list(df.columns))
 
     # Deduplicate on primary key — keep last occurrence
     if primary_key in result.columns and not result.empty:
@@ -49,7 +59,8 @@ def _validate_df(
         if dupes:
             log_event(logger, "INFO", f"{source_name}_deduped", dropped=dupes)
 
-    return result.reset_index(drop=True)
+    rows_out = len(result)
+    return result.reset_index(drop=True), rows_in, rows_out, rows_quarantined
 
 
 def build_silver_orders(
@@ -65,17 +76,21 @@ def build_silver_orders(
         return silver_dir / "orders" / f"date={date_str}" / "data.parquet"
 
     df = pd.read_parquet(src)
-    df = _validate_df(df, OrderRow, "order_id", quarantine_dir, logger, "orders")
+    df, rows_in, rows_out, rows_q = _validate_df(
+        df, OrderRow, "order_id", quarantine_dir, logger, "orders", date_str
+    )
 
     out_dir = silver_dir / "orders" / f"date={date_str}"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "data.parquet"
     df.to_parquet(out_path, index=False)
-    log_event(logger, "INFO", "silver_orders_written", rows=len(df), date=date_str)
+    log_event(logger, "INFO", "silver_orders_written",
+              date=date_str, rows_in=rows_in, rows_out=rows_out, rows_quarantined=rows_q)
     return out_path
 
 
 def build_silver_customers(
+    date_str: str,
     bronze_dir: Path,
     silver_dir: Path,
     quarantine_dir: Path,
@@ -87,13 +102,16 @@ def build_silver_customers(
         return silver_dir / "customers" / "data.parquet"
 
     df = pd.read_parquet(src)
-    df = _validate_df(df, CustomerRow, "customer_id", quarantine_dir, logger, "customers")
+    df, rows_in, rows_out, rows_q = _validate_df(
+        df, CustomerRow, "customer_id", quarantine_dir, logger, "customers", date_str
+    )
 
     out_dir = silver_dir / "customers"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "data.parquet"
     df.to_parquet(out_path, index=False)
-    log_event(logger, "INFO", "silver_customers_written", rows=len(df))
+    log_event(logger, "INFO", "silver_customers_written",
+              rows_in=rows_in, rows_out=rows_out, rows_quarantined=rows_q)
     return out_path
 
 
@@ -112,11 +130,14 @@ def build_silver_products(
     if df.empty:
         return silver_dir / "products" / "data.parquet"
 
-    df = _validate_df(df, ProductRow, "product_id", quarantine_dir, logger, "products")
+    df, rows_in, rows_out, rows_q = _validate_df(
+        df, ProductRow, "product_id", quarantine_dir, logger, "products", "snapshot"
+    )
 
     out_dir = silver_dir / "products"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "data.parquet"
     df.to_parquet(out_path, index=False)
-    log_event(logger, "INFO", "silver_products_written", rows=len(df))
+    log_event(logger, "INFO", "silver_products_written",
+              rows_in=rows_in, rows_out=rows_out, rows_quarantined=rows_q)
     return out_path

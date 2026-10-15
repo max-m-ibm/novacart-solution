@@ -1,5 +1,6 @@
 """Ingest daily orders CSV → Bronze parquet."""
 from __future__ import annotations
+import hashlib
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,7 +28,8 @@ def ingest_orders(
     if not src.exists():
         raise IngestionError(f"orders file not found: {src}")
 
-    df = pd.read_csv(src)
+    # FR-1.5: read all columns as strings — no type inference at Bronze
+    df = pd.read_csv(src, dtype=str)
     log_event(logger, "INFO", "orders_ingested", date=date_str, rows=len(df))
 
     check_schema(list(df.columns), EXPECTED_COLUMNS, "orders", logger)
@@ -36,6 +38,10 @@ def ingest_orders(
     df["_source_file"] = src.name
     df["_ingested_at"] = datetime.now(timezone.utc).isoformat()
     df["_partition_date"] = date_str
+    # FR-1.4: row hash over business columns
+    df["_row_hash"] = df[EXPECTED_COLUMNS].apply(
+        lambda r: hashlib.md5("|".join(r.astype(str)).encode()).hexdigest(), axis=1
+    )
 
     out_dir = bronze_dir / "orders" / f"date={date_str}"
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -20,7 +20,7 @@ git --version
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/lneale-hkda/novacart-solution.git
+git clone https://github.com/IngridAmerica/novacart-solution.git
 cd novacart-solution
 ```
 
@@ -87,7 +87,7 @@ then have teammates clone it. Pick **one** of the two options below.
 
 Best when you want to be able to pull in later updates from the original repo.
 
-1. Open <https://github.com/lneale-hkda/novacart-solution> and click **Fork**
+1. Open <https://github.com/IngridAmerica/novacart-solution> and click **Fork**
    (top-right). Set the owner to your team account or organization.
 2. Clone your fork (replace `YOUR-TEAM` with your account or org name):
 
@@ -99,7 +99,7 @@ Best when you want to be able to pull in later updates from the original repo.
 3. (Optional) Add a link to the original so you can pull updates later:
 
    ```bash
-   git remote add upstream https://github.com/lneale-hkda/novacart-solution.git
+   git remote add upstream https://github.com/IngridAmerica/novacart-solution.git
    git fetch upstream
    ```
 
@@ -229,7 +229,7 @@ These are created by the scripts/pipeline at runtime and are removed by
 | `data/landing/`     | Source      | Raw inputs (order CSVs, customer JSON, products SQLite DB). **Persistent input** — produced by `generate_sample_data.py`, not removed by cleanup. |
 | `data/bronze/`      | Bronze      | Raw data ingested as-is from landing, with minimal structure. |
 | `data/silver/`      | Silver      | Cleaned, validated, and deduplicated records. |
-| `data/gold/`        | Gold        | Analytics-ready dimensional model (dim_product, dim_customer, fact_orders). |
+| `data/gold/`        | Gold        | Analytics-ready dimensional model (dim_customer, dim_product, dim_date, fact_orders). |
 | `data/quarantine/`  | Quarantine  | Records that failed validation (bad quantity, invalid status, malformed email, etc.). |
 | `state/`            | Run state   | Per-run metadata and bookkeeping written by the orchestrator. |
 | `logs/`             | Logs        | Structured pipeline logs. |

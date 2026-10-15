@@ -1,3 +1,35 @@
+# ── Virtual environment ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Pipeline-generated output (recreated by running the pipeline) ─────────────
+data/bronze/
+data/silver/
+data/gold/
+data/quarantine/
+state/
+logs/
+
+# ── Landing data (recreated by generate_sample_data.py) ──────────────────────
+# Keep the landing directory but ignore the generated files inside it.
+# Comment these out if you want to commit sample source data to the repo.
+data/landing/orders/
+data/landing/customers/
+data/landing/products.db
+
+# ── Python cache ──────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# ── OS / editor noise ─────────────────────────────────────────────────────────
 .DS_Store
-.claude/
-Technical Docs/
+Thumbs.db
+.idea/
+.vscode/
+*.swp
